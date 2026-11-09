@@ -201,6 +201,14 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "max-age=1, stale-while-revalidate=1")
 
 	status.Lock()
+	// Return a non-2xx status when the node is unhealthy so that health
+	// checks which only inspect the HTTP status code (e.g. AWS Route 53
+	// default HTTP checks) drain the node. Covers both maintenance mode and
+	// network-threshold-exceeded. Must run before the body is written, since
+	// the first write implicitly commits a 200 status.
+	if !status.Free {
+		w.WriteHeader(http.StatusNotFound)
+	}
 	if out, err := json.MarshalIndent(status, "", "    "); err != nil {
 		http.Error(w, "Internal Server Error", 503)
 	} else {
